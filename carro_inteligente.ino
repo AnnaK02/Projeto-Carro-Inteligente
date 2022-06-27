@@ -389,14 +389,15 @@ void convertControlpad() {
     if(startStopEsq == true){ // Pressionado novamente
 
       analogWrite(pin1, LOW);
-      analogWrite(pin2, 250);
+      analogWrite(pin2, LOW);
       analogWrite(pin3, LOW);
-      analogWrite(pin4, LOW);
+      analogWrite(pin4, 250);
     }
     else{
-      analogWrite(pin2, LOW);
+      analogWrite(pin4, LOW);
     }
   }
+
 
   /* PARA TRÁS DIREITA */
   else if (rxString == "!B813"){
@@ -414,15 +415,15 @@ void convertControlpad() {
     if(startStopDir == true){ // Pressionado novamente
 
       analogWrite(pin1, LOW);
-      analogWrite(pin2, LOW);
+      analogWrite(pin2, 250);
       analogWrite(pin3, LOW);
-      analogWrite(pin4, 250);
-    }
-    else{
       analogWrite(pin4, LOW);
     }
+    else{
+      analogWrite(pin2, LOW);
+    }
   }
-   
+  
   /*
   else if (rxString == "!B10;") Serial.println("********** Stop Action 1");
   else if (rxString == "!B20:") Serial.println("********** Stop Action 2");
@@ -431,8 +432,7 @@ void convertControlpad() {
   else if (rxString == "!B507") Serial.println("********** Stop Action UP");
   else if (rxString == "!B606") Serial.println("********** Stop Action DOWN");
   else if (rxString == "!B705") Serial.println("********** Stop Action LEFT");
-  else if (rxString == "!B804") Serial.println("********** Stop Action RIGHT");
+  else if (rxString == "!B804") Serial.println("********** Stop Action RIGHT");  
   */
-   
   rxString = "";
 }
