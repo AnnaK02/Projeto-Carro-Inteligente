@@ -1,43 +1,26 @@
-/*
-   ESP32_UART.ino is a modified version of example sketch BLE_uart.ino. It has been
-   developed under Arduino 1.8.19.
-   The sketch has been reconfigured to be used with a ESP32 Dev Kit and the 
-   Bluefruit Connect app from Adafruit Industries. 
-   It has been tested on Apple iPhone and MacBook Air. The Dev Kit used is based on an 
-   ESP32-WROOM-32 from AZ Delivery.
-
-   The BLE device is named "Wim's ESP32 UART" but this can be personalised as required.
-   Download the Bluefruit Connect app from the App store and activate Bluetooth on the
-   iPhone. 
-   After opening the Bluefruit app: connect to the device, select Controller, then 
-   module Control pad. At the top is a window for the received data. 
-   The control pad has 4 arrows (up, down, left, right) and 4 number keys.
-
-   The serial monitor shows the received data and the control pad code. No control
-   action has been programmed but this can be added to the respective print statement.
-   A button is connected to input G0 and a piece of wire to input G32. This wire picks
-   up a random voltage, the value of which is transmitted to the device when the
-   button is pressed. The value appears on the monitor and in the window on the
-   control pad screen of the iPhone. The LED on pin G02 also lights up.
-
-   Note that the Bluefruit app sends two codes when a key is touched in the controller
-   module. The first code is sent when the key is touched, the second code when the key
-   is released. This can be useful, for example, when controlling a servo where the
-   activation continues as long as the key is held.
-
-   The data received from the device is also shown when selecting UART in the controller
-   app. At the bottom is a window to enter data to send back to the device. 
-
-            created by Wim der Kinderen on 28 February 2022
-*/
-
 // ***************************** BIBLIOTECAS *******************************
+
+#include <Adafruit_ATParser.h>
+#include <Adafruit_BluefruitLE_SPI.h>
+#include <Adafruit_BLEMIDI.h>
+#include <Adafruit_BLEBattery.h>
+#include <Adafruit_BLEGatt.h>
+#include <Adafruit_BLEEddystone.h>
+#include <Adafruit_BLE.h>
+#include <Adafruit_BluefruitLE_UART.h>
 
 #include <BLEDevice.h>
 #include <BLEServer.h>
 #include <BLEUtils.h>
 #include <BLE2902.h>
+
 #include <stdbool.h>
+#include <iostream>
+#include <string>
+#include <sstream>
+using namespace std;
+
+#include "DHT.h"
 
 
 // ***************************** VARIÁVEIS *******************************
@@ -48,7 +31,7 @@ BLECharacteristic *pCharacteristic;
 bool deviceConnected = false;
 float txValue = 0;
 const int button = 0;      // button on PIN G0
-const int readPin = 32;    // analog pin G32
+const int readPin = 4;    // analog pin G4
 const int LEDpin = 2;      // LED on pin G2
 bool convert = false;
 String rxString = "";
@@ -106,7 +89,18 @@ int distancia = 0;
 int lastCommand = -1;
 
 /* Sensor de temperatura/umidade */
-// !!
+int pinDHT11 = 32;
+DHT dht11;
+
+int temperature = 0;
+int humidity = 0;
+int tempInterna = 0;
+string aux1 = " ";
+string aux2 = " ";
+string aux3 = " ";
+
+int rgb_red = 12;
+int rgb_blue = 14;
 
 
 // ***************************** SETUP *******************************
@@ -139,7 +133,6 @@ void setup() {
   Serial.println("Waiting a client connection to notify...");
   Serial.println(" ");
 
-
   /* SETUP DOS DEMAIS COMPONENTES */
 
   /* Ponte H */
@@ -153,11 +146,14 @@ void setup() {
   pinMode(TRIGGER, OUTPUT); 
 
   /* Sensor temperatura/umidade */
-  
-  
-  Serial.begin(115200);
+
+  dht11.setup(pinDHT11);
+  pinMode(rgb_red, OUTPUT);
+  pinMode(rgb_blue, OUTPUT);
    
 /* Outros */
+  Serial.begin(115200);
+  
   pinMode(LEDpin, OUTPUT); 
   pinMode(button, INPUT);
 
@@ -211,6 +207,8 @@ void loop() {
     analogWrite(pin4, LOW);
   }
   
+  Temp_Umid();
+  
   delay(50);
 }
 
@@ -228,16 +226,72 @@ void DistanceSafety(){
 
   distancia = (tempo/2.0)/29.1;
 
-  if(distancia<=25 && lastCommand==1){
+  if(distancia<=25 && (lastCommand==1 || lastCommand==3 || lastCommand==4)){
     Serial.println("Risco de colisao!");
     analogWrite(pin1, LOW);
     analogWrite(pin2, LOW);
     analogWrite(pin3, LOW);
     analogWrite(pin4, LOW);
   }
-  
-  Serial.println(distancia);
 }
+
+
+/* DETECÇÃO DE TEMPERATURA E UMIDADE */
+
+void Temp_Umid() {
+  // start working...
+  Serial.println("=================================");
+  Serial.println("Sample DHT11...");
+
+  temperature = dht11.getTemperature();
+  humidity = dht11.getHumidity();
+  
+  Serial.print("Sample OK");
+
+  if(tempInterna==0){
+    analogWrite(rgb_red, LOW);
+    analogWrite(rgb_blue, LOW);
+  }
+  else if(tempInterna > 25){
+    analogWrite(rgb_red, 200);
+    analogWrite(rgb_blue, LOW);
+  }
+  else if (tempInterna < 22){
+    analogWrite(rgb_red, LOW);
+    analogWrite(rgb_blue, 200);
+  }
+  else if(22 <= tempInterna <= 25){
+    analogWrite(rgb_red, 50);
+    analogWrite(rgb_blue, 150);
+  }
+  
+
+  /* Enviando informações para o aplicativo */
+  aux1 = to_string(temperature);
+  aux2 = to_string(tempInterna);
+  aux3 = to_string(humidity);
+
+  pCharacteristic->setValue("Ext: ");
+  pCharacteristic->notify();
+  
+  pCharacteristic->setValue(aux1);
+  pCharacteristic->notify();
+  pCharacteristic->setValue("*C, Int: ");
+  pCharacteristic->notify();
+
+  pCharacteristic->setValue(aux2);
+  pCharacteristic->notify();
+  pCharacteristic->setValue("*C, Umid: ");
+  pCharacteristic->notify();
+
+  pCharacteristic->setValue(aux3);
+  pCharacteristic->notify();
+  pCharacteristic->setValue("%\n");
+  pCharacteristic->notify();
+
+  delay(20);
+}
+
 
 
 /* CONTROLPAD */
@@ -248,16 +302,26 @@ void convertControlpad() {
 
   
   if (rxString == "!B11:"){
-
-    lastCommand = 0;
-    
-    //Serial.println("********** Start Action 1");
-    Serial.println("********** STOP");
-    analogWrite(pin1, LOW);
-    analogWrite(pin2, LOW);
-    analogWrite(pin3, LOW);
-    analogWrite(pin4, LOW);
+    // do action 1
+    Serial.println("********** DIMINUIR TEMPERATURA INTERNA");
+    tempInterna--;
   }
+
+
+  else if (rxString == "!B219"){
+    // do action 2
+    Serial.println("********** AUMENTAR TEMPERATURA INTERNA");
+    tempInterna++;
+  }
+
+  
+  else if (rxString == "!B318"){
+    // do action 3
+    Serial.println("********** RECALCULAR RELACAO TEMP INTERNA/TEMP EXTERNA");
+    tempInterna = temperature;
+  }
+
+  
 
   /* PARA FRENTE */
   else if (rxString == "!B516"){
@@ -358,12 +422,8 @@ void convertControlpad() {
       analogWrite(pin4, LOW);
     }
   }
-
-
-  
-  else if (rxString == "!B219") Serial.println("********** Start Action 2");
-  else if (rxString == "!B318") Serial.println("********** Start Action 3");
-  else if (rxString == "!B417") Serial.println("********** Start Action 4");
+   
+  /*
   else if (rxString == "!B10;") Serial.println("********** Stop Action 1");
   else if (rxString == "!B20:") Serial.println("********** Stop Action 2");
   else if (rxString == "!B309") Serial.println("********** Stop Action 3");
@@ -371,6 +431,8 @@ void convertControlpad() {
   else if (rxString == "!B507") Serial.println("********** Stop Action UP");
   else if (rxString == "!B606") Serial.println("********** Stop Action DOWN");
   else if (rxString == "!B705") Serial.println("********** Stop Action LEFT");
-  else if (rxString == "!B804") Serial.println("********** Stop Action RIGHT");  
+  else if (rxString == "!B804") Serial.println("********** Stop Action RIGHT");
+  */
+   
   rxString = "";
 }
